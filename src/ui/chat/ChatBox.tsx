@@ -1,81 +1,134 @@
 import BoxHead from "./BoxHead";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import UserMessage from "./UserMessage";
 import AiMessage from "./AiMessage";
 import { talkToAi } from "../../api/aiEndpoint";
 import { chatType } from "../../utils/types";
-import { Box, Image } from "@chakra-ui/react";
+import { Image } from "@chakra-ui/react";
 import send from "../../assets/icon/Send_duotone.svg";
 import mic from "../../assets/icon/Mic_duotone_line.svg";
-import user_avatar from "../../assets/icon/user_avatar.svg";
+import user_avatar from "../../assets/icon/user_1_avatar.png";
+import { socket } from "../../utils/socket";
+
+const EMIT_INTERVAL_MILISECONDS = 2000;
 
 function ChatBox() {
   const [chats, setChats] = useState<chatType[]>([]);
+  // const [chats, setChats] = useState<chatType2[]>([]);
   const [userInput, setUserInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
   // ///////////////////////
-  // const [stream, setStream] = useState<null | MediaStream>(null);
+  const [stream, setStream] = useState<null | MediaStream>(null);
+  const testRef = useRef(null);
   // // const videoRef = useRef<LegacyRef<HTMLVideoElement> | null>(null);
 
-  // const startScreenSharing = async () => {
-  //   try {
-  //     // Request display media (screen sharing)
-  //     const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-  //       video: true,
-  //       audio: false,
-  //     });
+  useEffect(() => {
+    function recieveResFromStream() {
+      socket.on("analysis_result", function (data) {
+        console.log("Raw data:", data.response);
+        if (typeof data.response === "string") {
+          try {
+            const parsedData = JSON.parse(data.response);
+            console.log("Parsed data:", parsedData);
+            // setChats((prev) => {
+            //   return [...prev, { user: "a", ai: parsedData }];
+            // });
+            // testRef.current = parsedData;
+          } catch (error) {
+            console.error("Failed to parse JSON:", error);
+          }
+        } else {
+          console.log("Data is not a string, no need to parse.");
+        }
+      });
+    }
+    recieveResFromStream();
 
-  //     const mediaRecorder = new MediaRecorder(mediaStream, {
-  //       mimeType: "video/webm; codecs=vp8",
-  //     });
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
 
-  //     mediaRecorder.ondataavailable = (event) => {
-  //       if (event.data.size > 0) {
-  //         socket.emit("video-data", event.data);
-  //       }
-  //     };
+  const startScreenSharing = async () => {
+    try {
+      // Request display media (screen sharing)
+      const mediaStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
 
-  //     mediaRecorder.start(1000); //interval to send data
+      const mediaRecorder = new MediaRecorder(mediaStream, {
+        mimeType: "video/webm; codecs=vp8",
+      });
 
-  //     socket.on("connect", () => {
-  //       console.log("Socket.IO connection established.");
-  //     });
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          socket.emit("video-data", event.data);
+        }
+      };
 
-  //     socket.on("disconnect", () => {
-  //       console.log("Socket.IO connection closed.");
-  //     });
+      mediaRecorder.start(EMIT_INTERVAL_MILISECONDS); //interval to send data
 
-  //     socket.on("error", (error) => {
-  //       console.error("Socket.IO error: ", error);
-  //     });
+      socket.on("connect", () => {
+        console.log("Socket.IO connection established.");
+      });
 
-  //     socket.on("received", (data) => {
-  //       console.log("Server received data:", data);
-  //     });
+      socket.on("disconnect", () => {
+        console.log("Socket.IO connection closed.");
+      });
 
-  //     // Set the media stream to the video element
-  //     //   if (videoRef.current) {
-  //     //     videoRef.current.srcObject = mediaStream;
-  //     //   }
+      socket.on("error", (error) => {
+        console.error("Socket.IO error: ", error);
+      });
 
-  //     // Save the media stream in state
-  //     setStream(mediaStream);
-  //   } catch (error) {
-  //     console.error("Error accessing display media.", error);
-  //   }
-  // };
+      socket.on("received", (data) => {
+        console.log("Server received data:", data);
+      });
 
-  // const stopScreenSharing = () => {
-  //   if (stream) {
-  //     // Stop all tracks in the stream
-  //     stream.getTracks().forEach((track) => track.stop());
-  //     setStream(null);
+      // socket.on("analysis_result", function (data) {
+      //   console.log("Raw data:", data.response);
+      //   // Check if the data.response is a string and if it's parseable JSON
+      //   if (typeof data.response === "string") {
+      //     try {
+      //       const parsedData = JSON.parse(data.response);
+      //       console.log("Parsed data:", parsedData);
+      //       // setChats((prev) => {
+      //       //   return [...prev, { user: "a", ai: parsedData }];
+      //       // });
+      //       testRef.current = parsedData;
+      //     } catch (error) {
+      //       console.error("Failed to parse JSON:", error);
+      //     }
+      //   } else {
+      //     console.log("Data is not a string, no need to parse.");
+      //   }
+      // });
 
-  //     socket.disconnect();
-  //   }
-  // };
+      // Set the media stream to the video element
+      //   if (videoRef.current) {
+      //     videoRef.current.srcObject = mediaStream;
+      //   }
+
+      // Save the media stream in state
+      setStream(mediaStream);
+    } catch (error) {
+      console.error("Error accessing display media.", error);
+    }
+  };
+
+  const stopScreenSharing = () => {
+    if (stream) {
+      // Stop all tracks in the stream
+      stream.getTracks().forEach((track) => track.stop());
+      setStream(null);
+
+      socket.disconnect();
+    }
+  };
+
+  console.log(testRef.current);
 
   // ///////////////////////
 
@@ -87,6 +140,10 @@ function ChatBox() {
       const res = await talkToAi(userInput);
       // const formatted = res.slice(7, -3);
       setChats((prev) => [...prev, { user: userInput, ai: JSON.parse(res) }]);
+      // setChats((prev) => [
+      //   ...prev,
+      //   { user: userInput, ai: "testing streaming..." },
+      // ]);
       setUserInput("");
     } catch (error) {
       setError("Sorry, an error occured!");
@@ -105,6 +162,10 @@ function ChatBox() {
         const res = await talkToAi(userInput);
         // const formatted = res.slice(7, -3);
         setChats((prev) => [...prev, { user: userInput, ai: JSON.parse(res) }]);
+        // setChats((prev) => [
+        //   ...prev,
+        //   { user: userInput, ai: "testing streaming..." },
+        // ]);
         setUserInput("");
       } catch (error) {
         setError("Sorry, an error occured!");
@@ -124,15 +185,15 @@ function ChatBox() {
     // <div className="py-3 border bg-gray-100 border-gray-500 rounded-lg absolute top-2 right-6 w-[35rem] h-[35rem] flex flex-col">
     <div className="h-full flex flex-col">
       <BoxHead
-      // isStreaming={!!stream}
-      // onStartShare={startScreenSharing}
-      // onStopShare={stopScreenSharing}
+        isStreaming={!!stream}
+        onStartShare={startScreenSharing}
+        onStopShare={stopScreenSharing}
       />
       <main className="px-6 py-4 my-8 overflow-auto space-y-3">
         {chats.map((el) => (
           <>
-            <UserMessage msg={el.user} />
-            <AiMessage msg={el.ai} />
+            {el.user && <UserMessage msg={el.user} />}
+            {el.ai && <AiMessage msg={el.ai} />}
           </>
         ))}
         {isLoading && (
@@ -142,10 +203,16 @@ function ChatBox() {
           </>
         )}
       </main>
-      <footer className="flex items-center gap-4 mt-auto px-6 bg-slate-300">
-        <Box bg={"green"} alignItems={"center"}>
-          <Image src={user_avatar} w={48} h={48} />
-        </Box>
+      <footer className="flex items-center gap-4 mt-auto px-6 py-2 bg-slate-50">
+        {/* <Box bg={"green"} alignItems={"center"}> */}
+        <Image
+          src={user_avatar}
+          w={40}
+          h={40}
+          objectFit={"cover"}
+          objectPosition={"center"}
+        />
+        {/* </Box> */}
         <div className="bg-white px-2 py-1 justify-between rounded-full flex items-center w-full">
           <input
             type="text"

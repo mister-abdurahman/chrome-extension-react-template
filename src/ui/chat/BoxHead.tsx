@@ -8,6 +8,8 @@ import { Box, HStack, Image } from "@chakra-ui/react";
 
 function BoxHead({
   isStreaming,
+  onStartShare,
+  onStopShare,
 }: {
   isStreaming?: boolean;
   onStartShare?: () => Promise<void>;
@@ -23,7 +25,7 @@ function BoxHead({
         <Image src={mute_sound} />
         <Image src={size_right_up} />
         <button
-          // onClick={isStreaming ? onStopShare : onStartShare}
+          onClick={isStreaming ? onStopShare : onStartShare}
           className="bg-red_500 rounded-full flex items-center px-6 py-3 mr-4 text-white text-sm gap-2"
         >
           <Image src={send_square} />{" "}
